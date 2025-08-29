@@ -4,12 +4,15 @@ Firefly API Driver
 
 */
 const axios = require('axios');
-const xml = require('fast-xml-parser');
+const { XMLParser } = require('fast-xml-parser');
 const { v4: uuidv4 } = require('uuid');
+
+const parser = new XMLParser({ ignoreAttributes: false, allowBooleanAttributes: true });
 
 class Firefly {
 	constructor(host, appId = 'Firefly Node.JS Driver') {
 		if (!host) throw 'Invalid host';
+		if (!host.startsWith('https://')) throw 'Invalid host, must start with https://';
 
 		this.host = host;
 		this.appId = appId;
@@ -24,7 +27,7 @@ class Firefly {
 			axios.get('https://appgateway.fireflysolutions.co.uk/appgateway/school/' + code)
 			.then(response => {
 				try {
-					response = xml.parse(response.data, { ignoreAttributes: false, allowBooleanAttributes: true })
+					response = parser.parse(response.data)
 				}
 				catch (error) { return reject(error) }
 
@@ -56,9 +59,13 @@ class Firefly {
 			axios.get(this.host + '/login/api/version')
 			.then(response => {
 				try {
-					response = xml.parse(response.data)
+					response = parser.parse(response.data)
 				}
-				catch (error) { return reject(error) }
+				catch (error) { 
+					console.log("Got Error", error)
+					
+					return reject(error) 
+			}
 
 				return resolve({
 					major: response.version.majorVersion,
@@ -95,10 +102,8 @@ class Firefly {
 		if (xmlResponse.slice(-1, -0) === '"') xmlResponse = xmlResponse.slice(0, -1);
 		xmlResponse = xmlResponse.replace(/\\/g, '');
 
-		if (xml.validate(xmlResponse) !== true) throw 'Invalid xml';
-
 		try {
-			var json = xml.parse(xmlResponse, { ignoreAttributes: false });
+			var json = parser.parse(xmlResponse);
 		}
 		catch (err) { throw 'Invalid xml' }
 
@@ -110,7 +115,6 @@ class Firefly {
 			role: json.token.user['@_role'],
 			guid: json.token.user['@_guid'],
 		}
-		this.classes = json.token.user.classes.class.map(_class => ({ guid: _class['@_guid'], name: _class['@_name'], subject: _class['@_subject'] }));
 
 		return true;
 	}
@@ -216,17 +220,65 @@ class Firefly {
 		});
 	}
 
-	// Get events
+	//note: I dont seem to be getting classes returned
+	get classes() {
+		if (!this.user) throw 'Not authenticated';
+
+		return new Promise((resolve, reject) => {
+			this.graphQuery(`query Query {
+				users(guid: "${this.user.guid}") {
+					classes {
+						guid, name, subject
+					}
+				}
+			}`)
+			.then(response => resolve(response.data.data.users[0].classes))
+			.catch(err => reject(err));
+		});
+	}
+
 	getEvents(start, end) {
 		if (!this.user) throw 'Not authenticated';
 
 		return new Promise((resolve, reject) => {
 			this.graphQuery(`query Query {
-				events(start: "${start.toISOString().slice(0, -5)+'Z'}", for_guid: "${this.user.guid}", end: "${end.toISOString().slice(0, -5)+'Z'}") {
+				events(start: "${start.toISOString().slice(0, -5)}Z", for_guid: "${this.user.guid}", end: "${end.toISOString().slice(0, -5)}Z") {
 					end, location, start, subject, description, guild, attendees { role, principal { guid, name }}
 				}
 			}`)
 			.then(response => resolve(response.data.data.events))
+			.catch(err => reject(err));
+		});
+	}
+
+	getTasks(options = {}) {
+		if (!this.deviceId) throw 'No device ID';
+		if (!this.secret) throw 'Not authenticated';
+
+		const defaultOptions = {
+			ownerType: "OnlySetters",
+			page: 0,
+			pageSize: 100,
+			archiveStatus: "All",
+			completionStatus: "Todo",
+			readStatus: "All",
+			markingStatus: "All",
+			sortingCriteria: [{"column": "DueDate", "order": "Ascending"}]
+		};
+
+		const payload = { ...defaultOptions, ...options };
+
+		return new Promise((resolve, reject) => {
+			axios.post(
+				`${this.host}/api/v2/taskListing/view/student/tasks/all/filterBy?ffauth_device_id=${this.deviceId}&ffauth_secret=${this.secret}`,
+				payload,
+				{
+					headers: {
+						'Content-Type': 'application/json'
+					}
+				}
+			)
+			.then(response => resolve(response.data.items))
 			.catch(err => reject(err));
 		});
 	}
@@ -237,7 +289,6 @@ class Firefly {
 			deviceId: this.deviceId,
 			secret: this.secret,
 			user: this.user,
-			classes: this.classes,
 		});
 	}
 	import(json) {
@@ -253,12 +304,10 @@ class Firefly {
 		if (!json.deviceId) throw 'No device ID';
 		if (!json.secret) throw 'No secret';
 		if (!json.user) throw 'No user'
-		if (!json.classes) throw 'No classes';
 
 		this.deviceId = json.deviceId;
 		this.secret = json.secret;
 		this.user = json.user;
-		this.classes = json.classes;
 
 		return true;
 	}

@@ -3,35 +3,50 @@ require('dotenv').config();
 
 async function test() {
 	// Fetch school from code
-	//console.log(await Firefly.getHost(process.env.CODE));
+	var host = await Firefly.getHost(process.env.CODE);
+	console.log("Firefly HOST", host);
 
 	// Create instance
 	const instance = new Firefly(process.env.HOST);
 	instance.setDeviceId(process.env.DEVICE_ID);
 
-	// API version
-	//console.log(await instance.apiVersion);
+	var apiVersion = await instance.apiVersion;
+	console.log("API version", apiVersion);
 
 	// Authentication URL
-	//console.log(instance.authUrl);
-	//instance.authenticate();
+	console.log("Authenticating via ", instance.authUrl);
+	instance.authenticate(); //all this does is console.log
 	instance.completeAuthentication(process.env.XML);
 
-	//console.log(await instance.verifyCredentials());
+	const credsAreValid = await instance.verifyCredentials();
+	console.log("Credentials are valid:", credsAreValid);
 
 	// Events/timetable
-	//let finalDate = new Date();
-	//finalDate.setFullYear(2021);
-	//console.log(await instance.getEvents(new Date(), finalDate));
+	const startDate = new Date();
+	const endDate = new Date();
+	endDate.setDate(endDate.getDate() + 7); // Next 7 days
+	const events = await instance.getEvents(startDate, endDate);
+	console.log("Events", events);
 
 	// Messages
-	//console.log(await instance.messages);
+	const messages = await instance.messages;
+	console.log("Messages", messages);
 
 	// Bookmarks
-	//console.log(await instance.bookmarks);
+	const bookmarks = await instance.bookmarks;
+	console.log("Bookmarks", bookmarks);
 
 	// Groups
-	//console.log(await instance.groups);
+	const groups = await instance.groups;
+	console.log("Groups", groups);
+
+	// Classes
+	const classes = await instance.classes;
+	console.log("Classes", classes);
+
+	// Tasks
+	const tasks = await instance.getTasks();
+	console.log("Tasks", tasks);
 }
 
 test();

@@ -1,7 +1,6 @@
 # Git ignore
 
-#Node modules
 Examples/node_modules
-Examples/environment.json
 
-Examples/test.js
+Examples/environment.json
+.env.*

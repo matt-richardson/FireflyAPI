@@ -4,7 +4,8 @@
   "description": "A Node.JS API driver for the Firefly Schools Virtual Learning Environment",
   "main": "firefly-api.js",
   "scripts": {
-    "test": "node test.js"
+    "test": "node test-unit.js",
+    "test:integration": "node test.js"
   },
   "repository": {
     "type": "git",
